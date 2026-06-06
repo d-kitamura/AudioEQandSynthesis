@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audio EQ and Synthesis</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1>Audio EQ and Synthesis</h1>
+        <p>White/Pink noise EQ and sine additive synthesis</p>
+      </div>
+      <div class="transport">
+        <div class="segmented" role="tablist" aria-label="mode">
+          <button id="modeEq" class="active" type="button">EQ</button>
+          <button id="modeSynth" type="button">Synthesis</button>
+        </div>
+        <button id="startStop" class="primary" type="button">Start</button>
+        <label class="volume">
+          Master
+          <input id="masterGain" type="range" min="0" max="0.25" step="0.001" value="0.06">
+        </label>
+        <label class="languageField">
+          Language
+          <select id="languageSelect">
+            <option value="en">English</option>
+            <option value="ja">Japanese</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <section class="plotPane">
+        <div class="plotHeader">
+          <div>
+            <h2 id="plotTitle">Parametric EQ</h2>
+            <span id="plotHint">Drag point: frequency/gain. Wheel or two-finger pinch: Q. Double click: flatten band.</span>
+          </div>
+          <div id="readout" class="readout">Stopped</div>
+        </div>
+        <canvas id="plot" width="1200" height="720" aria-label="interactive audio plot"></canvas>
+      </section>
+
+      <aside class="sidePanel">
+        <section id="eqPanel" class="panelBlock">
+          <div class="row between">
+            <h3>EQ Bands</h3>
+            <div class="row">
+              <button id="addBand" type="button">Add</button>
+              <button id="resetEq" type="button">Flat</button>
+            </div>
+          </div>
+          <label class="field sourceInPanel">
+            Source
+            <select id="noiseType">
+              <option value="white">White noise</option>
+              <option value="pink">Pink noise</option>
+              <option value="synth">Synthesis</option>
+              <option value="file">Audio file</option>
+            </select>
+          </label>
+          <label id="audioFileField" class="field hidden">
+            Audio file
+            <input id="audioFile" type="file" accept="audio/*">
+          </label>
+          <div id="audioFileStatus" class="fileStatus hidden">No file loaded</div>
+          <div id="bandList" class="controlList"></div>
+        </section>
+
+        <section id="synthPanel" class="panelBlock hidden">
+          <div class="row between">
+            <h3>Sine Components</h3>
+            <button id="clearSynth" type="button">Clear</button>
+          </div>
+          <label class="field">
+            Base frequency
+            <input id="baseFreq" type="number" min="40" max="2000" step="1" value="400">
+          </label>
+          <label class="field">
+            Waveform view
+            <select id="waveformMode">
+              <option value="cycles">5 cycles</option>
+              <option value="time">Fixed time</option>
+            </select>
+          </label>
+          <div class="buttonGrid">
+            <button data-preset="harmonic" type="button">Harmonics</button>
+            <button data-preset="saw" type="button">Saw</button>
+            <button data-preset="square" type="button">Square</button>
+            <button data-preset="triangle" type="button">Triangle</button>
+          </div>
+          <div id="componentList" class="controlList"></div>
+        </section>
+
+        <section class="panelBlock">
+          <h3>Safety</h3>
+          <p class="small">Start with a low Master level. High gain and high-frequency components can sound harsh.</p>
+          <label class="check">
+            <input id="normalizeSynth" type="checkbox" checked>
+            Normalize synthesis level
+          </label>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,379 @@
+:root {
+  --bg: #05070b;
+  --ink: #e5edf6;
+  --muted: #94a3b8;
+  --line: #263241;
+  --panel: #0d131c;
+  --panel-2: #111a25;
+  --accent: #39ff14;
+  --accent-2: #f97316;
+  --accent-3: #67e8f9;
+  --shadow: 0 20px 50px rgba(0, 0, 0, 0.38);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: Inter, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+  color: var(--ink);
+  background: radial-gradient(circle at 30% 0%, #111827 0, #05070b 38%, #02040a 100%);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+select,
+input {
+  color: var(--ink);
+}
+
+button {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #14202c;
+  min-height: 44px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #64748b;
+  background: #192638;
+}
+
+button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.app {
+  width: min(1540px, calc(100vw - 28px));
+  margin: 0 auto;
+  padding: 18px 0 24px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 0 18px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: 750;
+}
+
+.topbar p,
+.small,
+#plotHint {
+  color: var(--muted);
+}
+
+.topbar p {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0b111a;
+}
+
+.segmented button {
+  border: 0;
+  border-radius: 0;
+  min-width: 116px;
+  background: transparent;
+}
+
+.segmented button.active {
+  background: var(--accent);
+  color: #020617;
+  font-weight: 800;
+}
+
+.primary {
+  min-width: 96px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #020617;
+  font-weight: 800;
+}
+
+.primary.running {
+  border-color: var(--accent-2);
+  background: var(--accent-2);
+  color: #111827;
+}
+
+.volume,
+.languageField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 210px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.languageField {
+  min-width: 190px;
+}
+
+.volume input {
+  width: 140px;
+}
+
+select,
+.field input {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #070b12;
+  padding: 5px 8px;
+  color: var(--ink);
+}
+
+select {
+  width: 100%;
+}
+
+.sourceInPanel {
+  margin-top: 12px;
+}
+
+.fileStatus {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 390px;
+  gap: 18px;
+  align-items: start;
+}
+
+.plotPane,
+.sidePanel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.plotPane {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.plotHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #0a1018;
+}
+
+h2 {
+  font-size: 18px;
+}
+
+#plotHint {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.readout {
+  min-width: 148px;
+  text-align: right;
+  color: var(--accent);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 15 / 9;
+  background: #05070b;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.sidePanel {
+  padding: 14px;
+}
+
+.panelBlock + .panelBlock {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.between {
+  justify-content: space-between;
+}
+
+.controlList {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.bandCard,
+.componentCard {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 11px;
+  display: grid;
+  gap: 10px;
+  background: var(--panel-2);
+}
+
+.bandCard.active,
+.componentCard.active {
+  border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.field {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.field input {
+  width: 100%;
+}
+
+.buttonGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.small {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .topbar,
+  .plotHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transport {
+    justify-content: flex-start;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .sidePanel {
+    order: -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .app {
+    width: calc(100vw - 16px);
+    padding-top: 8px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  .transport,
+  .volume,
+  .languageField {
+    width: 100%;
+  }
+
+  .segmented,
+  .volume input,
+  .languageField select {
+    flex: 1;
+  }
+
+  .segmented button {
+    min-width: 0;
+  }
+
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+}
