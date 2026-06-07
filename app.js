@@ -1,5 +1,6 @@
 const canvas = document.getElementById("plot");
 const ctx2d = canvas.getContext("2d");
+const plotHitLayer = document.getElementById("plotHitLayer");
 
 const FREQ_MIN = 20;
 const FREQ_AUDIO_MIN = 20;
@@ -7,6 +8,7 @@ const FREQ_MAX = 20000;
 const GAIN_MIN = -20;
 const GAIN_MAX = 20;
 const MAX_BANDS = 8;
+const RTA_MIN_UPDATE_MS = 1000 / 60;
 
 const BASE_MARGIN = { left: 78, right: 26, top: 22, bottom: 54 };
 
@@ -27,6 +29,7 @@ const state = {
   audioFileName: "",
   language: "en",
   rtaSmooth: [],
+  rtaLastTime: null,
   waveTrigger: "zero",
   waveformMode: "cycles",
   bands: [makeFlatBand()],
@@ -273,11 +276,28 @@ function yToAmp(y) {
   return clamp(1 - (y - rect.y) / rect.h, 0, 1);
 }
 
+function isInsideRect(point, rect) {
+  return point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
+}
+
+function updateHitLayer() {
+  const canvasRect = canvas.getBoundingClientRect();
+  const scale = canvasRect.width ? canvas.width / canvasRect.width : 1;
+  const rect = plotRect();
+  plotHitLayer.style.left = `${rect.x / scale}px`;
+  plotHitLayer.style.top = `${rect.y / scale}px`;
+  plotHitLayer.style.width = `${rect.w / scale}px`;
+  plotHitLayer.style.height = `${rect.h / scale}px`;
+}
+
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
   const ratio = window.devicePixelRatio || 1;
-  canvas.width = Math.max(820, Math.round(rect.width * ratio));
-  canvas.height = Math.max(460, Math.round(rect.height * ratio));
+  const width = Math.max(820, Math.round(rect.width * ratio));
+  const scale = rect.width ? width / rect.width : ratio;
+  canvas.width = width;
+  canvas.height = Math.max(460, Math.round(rect.height * scale));
+  updateHitLayer();
   draw();
 }
 
@@ -377,6 +397,7 @@ function applyFilterParams(filter, band) {
 function startEqAudio() {
   const { context, analyser } = state.audio;
   state.rtaSmooth = [];
+  state.rtaLastTime = null;
   const input = context.createGain();
   state.audio.eqInput = input;
 
@@ -545,6 +566,7 @@ function setMode(mode) {
   state.drag = null;
   state.pinch = null;
   state.pointers.clear();
+  document.body.classList.toggle("synthMode", mode === "synth");
   el.modeEq.classList.toggle("active", mode === "eq");
   el.modeSynth.classList.toggle("active", mode === "synth");
   el.eqPanel.classList.toggle("hidden", mode !== "eq");
@@ -648,26 +670,37 @@ function setDashForMajor(major) {
 
 function drawRta(area = plotRect()) {
   if (!state.running || !state.audio) return;
+  const now = performance.now();
+  const elapsedMs = state.rtaLastTime === null ? RTA_MIN_UPDATE_MS : now - state.rtaLastTime;
+  const shouldUpdate = state.rtaLastTime === null || elapsedMs >= RTA_MIN_UPDATE_MS;
+  const elapsedFrames = clamp(elapsedMs / RTA_MIN_UPDATE_MS, 0, 4);
   const barsPerOctave = 8;
   const totalBars = Math.ceil(Math.log2(FREQ_MAX / FREQ_MIN) * barsPerOctave);
   if (state.noiseType === "synth") {
-    drawSynthSourceRta(area, barsPerOctave, totalBars);
+    if (shouldUpdate) state.rtaLastTime = now;
+    drawSynthSourceRta(area, barsPerOctave, totalBars, shouldUpdate ? elapsedFrames : 0);
     return;
   }
-  const { analyser, floatFreqData } = state.audio;
-  analyser.getFloatFrequencyData(floatFreqData);
-  ctx2d.save();
-  ctx2d.globalAlpha = 0.58;
-  ctx2d.setLineDash([]);
-  const barLevels = [];
-
+  const barDefs = [];
   for (let bar = 0; bar < totalBars; bar += 1) {
     const f1 = FREQ_MIN * 2 ** (bar / barsPerOctave);
+    if (f1 > FREQ_MAX) break;
     const visualF2 = FREQ_MIN * 2 ** ((bar + 1) / barsPerOctave);
+    barDefs.push({ f1, f2: Math.min(visualF2, FREQ_MAX) });
+  }
+  if (!shouldUpdate) {
+    drawRtaBars(area, barDefs);
+    return;
+  }
+  state.rtaLastTime = now;
+  const { analyser, floatFreqData } = state.audio;
+  analyser.getFloatFrequencyData(floatFreqData);
+  const barLevels = [];
+
+  barDefs.forEach(({ f1, f2 }) => {
     const lowBlend = clamp((360 - f1) / 340, 0, 1);
     const analysisWidth = 1 + lowBlend * 0.85;
-    const analysisF2 = FREQ_MIN * 2 ** ((bar + analysisWidth) / barsPerOctave);
-    if (f1 > FREQ_MAX) break;
+    const analysisF2 = f1 * 2 ** (analysisWidth / barsPerOctave);
     const i1 = Math.max(1, Math.floor((f1 * analyser.fftSize) / state.audio.context.sampleRate));
     const i2 = Math.min(floatFreqData.length - 1, Math.ceil((Math.min(analysisF2, FREQ_MAX) * analyser.fftSize) / state.audio.context.sampleRate));
     const values = [];
@@ -684,14 +717,13 @@ function drawRta(area = plotRect()) {
       const db = trimmed.reduce((sum, value) => sum + value, 0) / trimmed.length;
       barLevels.push({
         f1,
-        f2: Math.min(visualF2, FREQ_MAX),
+        f2,
         db,
       });
     }
-  }
+  });
 
   if (!barLevels.length) {
-    ctx2d.restore();
     return;
   }
 
@@ -701,10 +733,25 @@ function drawRta(area = plotRect()) {
   barLevels.forEach((bar, index) => {
     const targetTopDb = absoluteRtaDbToGraphDb(bar.db);
     const previous = state.rtaSmooth[index] ?? targetTopDb;
-    const smoothing = 0.8 + clamp((220 - bar.f1) / 200, 0, 1) * 0.05;
+    const smoothing = (0.8 + clamp((220 - bar.f1) / 200, 0, 1) * 0.05) ** elapsedFrames;
     const smoothedTopDb = clamp(previous * smoothing + targetTopDb * (1 - smoothing), bottomLimit, topLimit);
     state.rtaSmooth[index] = smoothedTopDb;
+  });
 
+  if (state.rtaSmooth.length > barLevels.length) {
+    state.rtaSmooth.length = barLevels.length;
+  }
+  drawRtaBars(area, barLevels);
+}
+
+function drawRtaBars(area, bars) {
+  if (!state.rtaSmooth.length) return;
+  ctx2d.save();
+  ctx2d.globalAlpha = 0.58;
+  ctx2d.setLineDash([]);
+  bars.forEach((bar, index) => {
+    const smoothedTopDb = state.rtaSmooth[index];
+    if (!Number.isFinite(smoothedTopDb)) return;
     const x1 = logFreqToX(bar.f1);
     const x2 = logFreqToX(bar.f2);
     const width = Math.max(2, x2 - x1 - 1);
@@ -716,10 +763,6 @@ function drawRta(area = plotRect()) {
     ctx2d.fillStyle = `hsl(${hue}, 100%, ${38 + intensity * 25}%)`;
     ctx2d.fillRect(x1 + 0.5, yTop, width, height);
   });
-
-  if (state.rtaSmooth.length > barLevels.length) {
-    state.rtaSmooth.length = barLevels.length;
-  }
   ctx2d.restore();
 }
 
@@ -737,7 +780,7 @@ function absoluteSynthDbToGraphDb(db) {
   return clamp(GAIN_MIN + normalized * (GAIN_MAX - GAIN_MIN - 6), GAIN_MIN, GAIN_MAX - 0.6);
 }
 
-function drawSynthSourceRta(area, barsPerOctave, totalBars) {
+function drawSynthSourceRta(area, barsPerOctave, totalBars, elapsedFrames = 1) {
   ctx2d.save();
   ctx2d.globalAlpha = 0.62;
   ctx2d.setLineDash([]);
@@ -751,7 +794,8 @@ function drawSynthSourceRta(area, barsPerOctave, totalBars) {
     const componentDb = 20 * Math.log10(Math.max(amp, 0.00001));
     const targetTopDb = absoluteSynthDbToGraphDb(componentDb);
     const previous = state.rtaSmooth[index] ?? targetTopDb;
-    const smoothedTopDb = clamp(previous * 0.72 + targetTopDb * 0.28, GAIN_MIN, GAIN_MAX - 0.6);
+    const smoothing = 0.72 ** elapsedFrames;
+    const smoothedTopDb = clamp(previous * smoothing + targetTopDb * (1 - smoothing), GAIN_MIN, GAIN_MAX - 0.6);
     state.rtaSmooth[index] = smoothedTopDb;
     const x = logFreqToX(component.f);
     const width = clamp(canvas.width / 230, 3, 7);
@@ -880,7 +924,8 @@ function drawGrid(kind) {
     });
   }
 
-  ctx2d.font = `600 ${canvasPx(15)}px sans-serif`;
+  const axisFontSize = canvas.getBoundingClientRect().width <= 520 ? 11 : 15;
+  ctx2d.font = `600 ${canvasPx(axisFontSize)}px sans-serif`;
   ctx2d.textBaseline = "alphabetic";
   freqTicks.forEach((freq) => {
     const major = isMajorFreq(freq);
@@ -895,17 +940,10 @@ function drawGrid(kind) {
     ctx2d.setLineDash([]);
     ctx2d.fillStyle = "#cbd5e1";
     const label = freq >= 1000 ? `${freq / 1000}k` : `${freq}`;
-    let labelX = x;
-    let align = "center";
-    if (freq === FREQ_MIN) {
-      labelX = x + canvasPx(3);
-      align = "left";
-    }
-    if (freq === FREQ_MAX) {
-      labelX = x;
-      align = "right";
-    }
-    ctx2d.textAlign = align;
+    const labelWidth = ctx2d.measureText(label).width;
+    const halfLabel = labelWidth / 2;
+    const labelX = freq === FREQ_MIN || freq === FREQ_MAX ? x : clamp(x, rect.x + halfLabel, rect.x + rect.w - halfLabel);
+    ctx2d.textAlign = "center";
     ctx2d.fillText(label, labelX, rect.y + rect.h + canvasPx(32));
   });
   ctx2d.textAlign = "start";
@@ -983,18 +1021,19 @@ function drawEq() {
   state.bands.forEach((band, index) => {
     const x = logFreqToX(band.f);
     const y = gainToY(band.gain);
+    const radius = index === state.selectedBand ? 14 : 10;
     ctx2d.beginPath();
-    ctx2d.arc(x, y, index === state.selectedBand ? 16 : 12, 0, Math.PI * 2);
+    ctx2d.arc(x, y, canvasPx(radius), 0, Math.PI * 2);
     ctx2d.fillStyle = index === state.selectedBand ? "#f97316" : "#94a3b8";
     ctx2d.fill();
     ctx2d.strokeStyle = "#0f172a";
-    ctx2d.lineWidth = 2;
+    ctx2d.lineWidth = canvasPx(2);
     ctx2d.stroke();
     ctx2d.fillStyle = "#020617";
-    ctx2d.font = "bold 14px sans-serif";
+    ctx2d.font = `bold ${canvasPx(14)}px sans-serif`;
     ctx2d.textAlign = "center";
     ctx2d.textBaseline = "middle";
-    ctx2d.fillText(String(index + 1), x, y + 0.5);
+    ctx2d.fillText(String(index + 1), x, y + canvasPx(0.5));
     ctx2d.textAlign = "start";
     ctx2d.textBaseline = "alphabetic";
   });
@@ -1023,6 +1062,7 @@ function drawSynth() {
 }
 
 function draw() {
+  updateHitLayer();
   if (state.mode === "eq") drawEq();
   else drawSynth();
 }
@@ -1171,11 +1211,12 @@ function nearestBand(point) {
 
 function nearestComponent(point) {
   let best = { index: -1, dist: Infinity };
+  const touchRadius = canvas.getBoundingClientRect().width <= 520 ? canvasPx(15) : 44;
   state.components.forEach((component, index) => {
     const dist = Math.hypot(logFreqToX(component.f) - point.x, ampToY(component.amp) - point.y);
     if (dist < best.dist) best = { index, dist };
   });
-  return best.dist < 44 ? best.index : -1;
+  return best.dist < touchRadius ? best.index : -1;
 }
 
 function addComponent(point) {
@@ -1207,7 +1248,7 @@ function pointerDistance() {
   return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
 }
 
-canvas.addEventListener("pointerdown", (event) => {
+plotHitLayer.addEventListener("pointerdown", (event) => {
   const point = canvasPoint(event);
   state.pointers.set(event.pointerId, point);
 
@@ -1228,6 +1269,10 @@ canvas.addEventListener("pointerdown", (event) => {
       state.drag = { type: "band", index, lockX: event.ctrlKey, lockY: event.shiftKey };
     }
   } else {
+    if (!isInsideRect(point, plotRect())) {
+      state.drag = null;
+      return;
+    }
     const index = nearestComponent(point);
     if (index >= 0) {
       state.selectedComponent = index;
@@ -1237,12 +1282,12 @@ canvas.addEventListener("pointerdown", (event) => {
       state.drag = { type: "component", index: state.selectedComponent, lockX: false, lockY: false };
     }
   }
-  canvas.setPointerCapture(event.pointerId);
+  event.currentTarget.setPointerCapture(event.pointerId);
   renderControls();
   draw();
 });
 
-canvas.addEventListener("pointermove", (event) => {
+plotHitLayer.addEventListener("pointermove", (event) => {
   const point = canvasPoint(event);
   if (state.pointers.has(event.pointerId)) state.pointers.set(event.pointerId, point);
 
@@ -1250,7 +1295,7 @@ canvas.addEventListener("pointermove", (event) => {
     const distance = pointerDistance();
     const band = state.bands[state.pinch.index];
     if (distance > 0 && band) {
-      band.q = clamp(state.pinch.q * (distance / Math.max(1, state.pinch.distance)), 0.2, 20);
+      band.q = clamp(state.pinch.q * (Math.max(1, state.pinch.distance) / distance), 0.2, 20);
       syncAudio();
       syncBandInputs(state.pinch.index);
       draw();
@@ -1285,10 +1330,10 @@ function endPointer(event) {
   state.drag = null;
 }
 
-canvas.addEventListener("pointerup", endPointer);
-canvas.addEventListener("pointercancel", endPointer);
+plotHitLayer.addEventListener("pointerup", endPointer);
+plotHitLayer.addEventListener("pointercancel", endPointer);
 
-canvas.addEventListener("dblclick", (event) => {
+plotHitLayer.addEventListener("dblclick", (event) => {
   const point = canvasPoint(event);
   if (state.mode === "eq") {
     const index = nearestBand(point);
@@ -1305,7 +1350,7 @@ canvas.addEventListener("dblclick", (event) => {
   draw();
 });
 
-canvas.addEventListener("wheel", (event) => {
+plotHitLayer.addEventListener("wheel", (event) => {
   if (state.mode !== "eq") return;
   event.preventDefault();
   const point = canvasPoint(event);

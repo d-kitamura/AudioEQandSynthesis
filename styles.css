@@ -228,13 +228,25 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+.plotCanvasWrap {
+  position: relative;
+}
+
 canvas {
   display: block;
   width: 100%;
   aspect-ratio: 15 / 9;
   background: #05070b;
+  touch-action: pan-y;
+}
+
+#plotHitLayer {
+  position: absolute;
+  left: 0;
+  top: 0;
   cursor: crosshair;
   touch-action: none;
+  z-index: 1;
 }
 
 .sidePanel {
@@ -342,8 +354,12 @@ h3 {
     grid-template-columns: 1fr;
   }
 
-  .sidePanel {
+  .plotPane {
     order: -1;
+  }
+
+  .sidePanel {
+    order: 0;
   }
 }
 
@@ -375,5 +391,9 @@ h3 {
 
   .fieldGrid {
     grid-template-columns: 1fr;
+  }
+
+  canvas {
+    aspect-ratio: 1 / 1.25;
   }
 }

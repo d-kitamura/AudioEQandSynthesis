@@ -43,7 +43,10 @@
           </div>
           <div id="readout" class="readout">Stopped</div>
         </div>
-        <canvas id="plot" width="1200" height="720" aria-label="interactive audio plot"></canvas>
+        <div class="plotCanvasWrap">
+          <canvas id="plot" width="1200" height="720" aria-label="interactive audio plot"></canvas>
+          <div id="plotHitLayer" aria-hidden="true"></div>
+        </div>
       </section>
 
       <aside class="sidePanel">
