@@ -17,6 +17,7 @@ const makeFlatBand = (f = 1000) => ({ type: "peaking", f, q: 1, gain: 0 });
 const state = {
   mode: "eq",
   running: false,
+  transportBusy: false,
   selectedBand: 0,
   selectedComponent: null,
   drag: null,
@@ -25,6 +26,9 @@ const state = {
   animation: null,
   audio: null,
   noiseType: "white",
+  musicBuffer: null,
+  musicLoadPromise: null,
+  musicLoadStatus: "idle",
   audioFileBuffer: null,
   audioFileName: "",
   language: "en",
@@ -84,7 +88,11 @@ const i18n = {
     whiteNoise: "White noise",
     pinkNoise: "Pink noise",
     synthSource: "Synthesis",
+    musicSource: "Music",
     fileSource: "Audio file",
+    musicSample: "Sample: mix.mp3",
+    musicLoading: "Loading sample music...",
+    musicLoadError: "Could not load the sample music.",
     audioFile: "Audio file",
     noFileLoaded: "No file loaded",
     loadingFile: "Loading...",
@@ -139,7 +147,11 @@ const i18n = {
     whiteNoise: "ホワイトノイズ",
     pinkNoise: "ピンクノイズ",
     synthSource: "合成音",
+    musicSource: "Music",
     fileSource: "音声ファイル",
+    musicSample: "サンプル: mix.mp3",
+    musicLoading: "サンプル音源を読込中...",
+    musicLoadError: "サンプル音源を読み込めませんでした。",
     audioFile: "音声ファイル",
     noFileLoaded: "ファイル未読込",
     loadingFile: "読込中...",
@@ -428,10 +440,11 @@ function startEqAudio() {
       osc.start(startAt);
       return { osc, gain, component };
     });
-  } else if (state.noiseType === "file") {
-    if (!state.audioFileBuffer) return;
+  } else if (state.noiseType === "music" || state.noiseType === "file") {
+    const buffer = state.noiseType === "music" ? state.musicBuffer : state.audioFileBuffer;
+    if (!buffer) return;
     const source = context.createBufferSource();
-    source.buffer = state.audioFileBuffer;
+    source.buffer = buffer;
     source.loop = true;
     source.connect(input);
     source.start();
@@ -507,7 +520,7 @@ async function loadAudioFile(file) {
     const decoded = await audio.context.decodeAudioData(arrayBuffer.slice(0));
     state.audioFileBuffer = decoded;
     state.audioFileName = file.name;
-    updateAudioFileUi();
+    updateSourceUi();
     if (state.running && state.mode === "eq" && state.noiseType === "file") {
       restartForMode();
     }
@@ -524,6 +537,57 @@ async function loadAudioFile(file) {
   }
 }
 
+function decodeBase64(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+}
+
+async function loadMusicSample() {
+  if (state.musicBuffer) return state.musicBuffer;
+  if (state.musicLoadPromise) {
+    try {
+      return await state.musicLoadPromise;
+    } catch {
+      return null;
+    }
+  }
+
+  state.musicLoadStatus = "loading";
+  updateSourceUi();
+  state.musicLoadPromise = (async () => {
+    const encodedAudio = globalThis.MUSIC_SAMPLE_BASE64;
+    if (!encodedAudio) throw new Error("Embedded music sample is unavailable");
+    const audio = await ensureAudio();
+    const decoded = await audio.context.decodeAudioData(decodeBase64(encodedAudio));
+    state.musicBuffer = decoded;
+    state.musicLoadStatus = "loaded";
+    globalThis.MUSIC_SAMPLE_BASE64 = null;
+    return decoded;
+  })();
+
+  try {
+    return await state.musicLoadPromise;
+  } catch (error) {
+    console.error(error);
+    state.musicBuffer = null;
+    state.musicLoadStatus = "error";
+    return null;
+  } finally {
+    state.musicLoadPromise = null;
+    updateSourceUi();
+  }
+}
+
+async function prepareEqSource(source = state.noiseType) {
+  if (source === "music") return Boolean(await loadMusicSample());
+  if (source === "file") return Boolean(state.audioFileBuffer);
+  return true;
+}
+
 function startAnimation() {
   if (state.animation) return;
   const tick = () => {
@@ -534,24 +598,34 @@ function startAnimation() {
 }
 
 async function toggleAudio() {
-  await ensureAudio();
-  if (state.audio.context.state === "suspended") await state.audio.context.resume();
-
-  if (state.running) {
-    stopSources();
-    state.running = false;
-  } else {
-    if (state.mode === "eq" && state.noiseType === "file" && !state.audioFileBuffer) {
-      updateAudioFileUi();
-      return;
-    }
-    state.running = true;
-    if (state.mode === "eq") startEqAudio();
-    else startSynthAudio();
-    startAnimation();
-  }
+  if (state.transportBusy) return;
+  state.transportBusy = true;
   updateTransport();
-  draw();
+  try {
+    await ensureAudio();
+    if (state.audio.context.state === "suspended") await state.audio.context.resume();
+
+    if (state.running) {
+      stopSources();
+      state.running = false;
+    } else {
+      const requestedMode = state.mode;
+      const requestedSource = state.noiseType;
+      if (requestedMode === "eq" && !(await prepareEqSource(requestedSource))) {
+        updateSourceUi();
+        return;
+      }
+      if (state.mode !== requestedMode || state.noiseType !== requestedSource) return;
+      state.running = true;
+      if (state.mode === "eq") startEqAudio();
+      else startSynthAudio();
+      startAnimation();
+    }
+    draw();
+  } finally {
+    state.transportBusy = false;
+    updateTransport();
+  }
 }
 
 function restartForMode() {
@@ -580,6 +654,7 @@ function setMode(mode) {
 
 function updateTransport() {
   el.startStop.textContent = state.running ? t("stop") : t("start");
+  el.startStop.disabled = state.transportBusy;
   el.startStop.classList.toggle("running", state.running);
   el.readout.textContent = state.running
     ? (state.mode === "eq" ? `${el.noiseType.options[el.noiseType.selectedIndex].textContent}` : `${state.components.length} ${t("sinesPlaying")}`)
@@ -600,9 +675,10 @@ function applyLanguage() {
   el.noiseType.options[0].textContent = t("whiteNoise");
   el.noiseType.options[1].textContent = t("pinkNoise");
   el.noiseType.options[2].textContent = t("synthSource");
-  el.noiseType.options[3].textContent = t("fileSource");
+  el.noiseType.options[3].textContent = t("musicSource");
+  el.noiseType.options[4].textContent = t("fileSource");
   el.audioFileField.firstChild.textContent = `${t("audioFile")} `;
-  updateAudioFileUi();
+  updateSourceUi();
   document.querySelector("#synthPanel h3").textContent = t("sineComponents");
   el.clearSynth.textContent = t("clear");
   document.querySelector("#synthPanel .field").firstChild.textContent = `${t("baseFrequency")} `;
@@ -622,10 +698,19 @@ function applyLanguage() {
   draw();
 }
 
-function updateAudioFileUi() {
+function updateSourceUi() {
   const isFileSource = state.noiseType === "file";
+  const isMusicSource = state.noiseType === "music";
   el.audioFileField.classList.toggle("hidden", !isFileSource);
-  el.audioFileStatus.classList.toggle("hidden", !isFileSource);
+  el.audioFileStatus.classList.toggle("hidden", !isFileSource && !isMusicSource);
+  if (isMusicSource) {
+    el.audioFileStatus.textContent = state.musicLoadStatus === "loading"
+      ? t("musicLoading")
+      : state.musicLoadStatus === "error"
+        ? t("musicLoadError")
+        : t("musicSample");
+    return;
+  }
   if (!isFileSource) return;
   el.audioFileStatus.textContent = state.audioFileName
     ? `${t("fileLoaded")}: ${state.audioFileName}`
@@ -1455,17 +1540,25 @@ el.languageSelect.addEventListener("change", () => {
   state.language = el.languageSelect.value;
   applyLanguage();
 });
-el.noiseType.addEventListener("change", () => {
-  state.noiseType = el.noiseType.value;
-  if (state.running && state.mode === "eq" && state.noiseType === "file" && !state.audioFileBuffer) {
-    stopSources();
-    state.running = false;
-  } else if (state.running && state.mode === "eq") {
-    restartForMode();
-  }
-  updateAudioFileUi();
+el.noiseType.addEventListener("change", async () => {
+  const selectedSource = el.noiseType.value;
+  const wasRunning = state.running && state.mode === "eq";
+  state.noiseType = selectedSource;
+  if (wasRunning) stopSources();
+  updateSourceUi();
   updateTransport();
   draw();
+
+  if (!wasRunning) return;
+  const ready = await prepareEqSource(selectedSource);
+  if (state.noiseType !== selectedSource || state.mode !== "eq") return;
+  if (ready) {
+    startEqAudio();
+  } else {
+    state.running = false;
+    updateTransport();
+    draw();
+  }
 });
 el.audioFile.addEventListener("change", () => {
   loadAudioFile(el.audioFile.files?.[0]);

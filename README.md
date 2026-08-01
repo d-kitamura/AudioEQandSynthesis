@@ -20,6 +20,7 @@ https://d-kitamura.github.io/AudioEQandSynthesis/
 
 * ブラウザ上で動作するリアルタイム音響デモ
 * ホワイトノイズ・ピンクノイズへのEQ適用
+* 内蔵サンプル音源（`mix.mp3`）へのEQ適用
 * 音声ファイルを読み込んでEQを適用
 * 最大8バンドのパラメトリックEQ
 * EQバンドごとの周波数，ゲイン，Qの調整
@@ -67,6 +68,7 @@ https://d-kitamura.github.io/AudioEQandSynthesis/
    * White noise
    * Pink noise
    * Synthesis
+   * Music（内蔵サンプル `mix.mp3`）
    * Audio file
 4. グラフ上のEQ点をドラッグすると，中心周波数とゲインを変更できます。
 5. マウスホイールまたは2本指ピンチでQを変更できます。
@@ -126,7 +128,9 @@ http://localhost:8000
 AudioEQandSynthesis/
 ├── index.html   # アプリ本体のHTML
 ├── styles.css   # 画面レイアウトとデザイン
-└── app.js       # 音声処理，描画，UI制御
+├── app.js       # 音声処理，描画，UI制御
+├── mix-data.js  # ローカル実行用に埋め込んだMusicデータ
+└── mix.mp3      # Music用の内蔵サンプル音源
 ```
 
 ## 注意
@@ -166,6 +170,7 @@ https://d-kitamura.github.io/AudioEQandSynthesis/
 
 * Real-time browser-based audio demonstration
 * EQ processing for white noise and pink noise
+* EQ processing for the built-in music sample (`mix.mp3`)
 * Audio file loading and EQ processing
 * Up to 8 parametric EQ bands
 * Control of frequency, gain, and Q for each EQ band
@@ -213,6 +218,7 @@ https://d-kitamura.github.io/AudioEQandSynthesis/
    * White noise
    * Pink noise
    * Synthesis
+   * Music (built-in `mix.mp3` sample)
    * Audio file
 4. Drag an EQ point on the graph to change its center frequency and gain.
 5. Use the mouse wheel or a two-finger pinch gesture to change Q.
@@ -272,7 +278,9 @@ http://localhost:8000
 AudioEQandSynthesis/
 ├── index.html   # Main HTML file
 ├── styles.css   # Layout and visual design
-└── app.js       # Audio processing, drawing, and UI control
+├── app.js       # Audio processing, drawing, and UI control
+├── mix-data.js  # Embedded Music data for local-file execution
+└── mix.mp3      # Built-in sample used by the Music source
 ```
 
 ## Note
