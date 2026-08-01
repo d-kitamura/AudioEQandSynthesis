@@ -1334,8 +1334,11 @@ function pointerDistance() {
 }
 
 plotHitLayer.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  event.preventDefault();
   const point = canvasPoint(event);
   state.pointers.set(event.pointerId, point);
+  event.currentTarget.setPointerCapture(event.pointerId);
 
   if (state.mode === "eq" && state.pointers.size === 2 && state.selectedBand !== null) {
     state.pinch = {
@@ -1367,12 +1370,12 @@ plotHitLayer.addEventListener("pointerdown", (event) => {
       state.drag = { type: "component", index: state.selectedComponent, lockX: false, lockY: false };
     }
   }
-  event.currentTarget.setPointerCapture(event.pointerId);
   renderControls();
   draw();
 });
 
 plotHitLayer.addEventListener("pointermove", (event) => {
+  if (state.drag || state.pinch) event.preventDefault();
   const point = canvasPoint(event);
   if (state.pointers.has(event.pointerId)) state.pointers.set(event.pointerId, point);
 
@@ -1417,6 +1420,9 @@ function endPointer(event) {
 
 plotHitLayer.addEventListener("pointerup", endPointer);
 plotHitLayer.addEventListener("pointercancel", endPointer);
+plotHitLayer.addEventListener("lostpointercapture", endPointer);
+plotHitLayer.addEventListener("dragstart", (event) => event.preventDefault());
+canvas.addEventListener("dragstart", (event) => event.preventDefault());
 
 plotHitLayer.addEventListener("dblclick", (event) => {
   const point = canvasPoint(event);
