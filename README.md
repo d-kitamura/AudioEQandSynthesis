@@ -22,11 +22,12 @@ https://d-kitamura.github.io/AudioEQandSynthesis/
 * ホワイトノイズ・ピンクノイズへのEQ適用
 * 内蔵サンプル音源（`mix.mp3`）へのEQ適用
 * 音声ファイルを読み込んでEQを適用
-* 最大8バンドのパラメトリックEQ
+* 最大20バンドのパラメトリックEQ
 * EQバンドごとの周波数，ゲイン，Qの調整
 * EQ点をドラッグして直感的に周波数・ゲインを操作
 * マウスホイールまたは2本指ピンチによるQの調整
-* ダブルクリックによるEQバンドのフラット化
+* EQ点のダブルクリックによるフラット化
+* グラフの空き位置をダブルクリックしてPeakingバンドを追加
 * 以下のフィルタタイプに対応
 
   * Peaking
@@ -172,11 +173,12 @@ https://d-kitamura.github.io/AudioEQandSynthesis/
 * EQ processing for white noise and pink noise
 * EQ processing for the built-in music sample (`mix.mp3`)
 * Audio file loading and EQ processing
-* Up to 8 parametric EQ bands
+* Up to 20 parametric EQ bands
 * Control of frequency, gain, and Q for each EQ band
 * Intuitive drag operation for frequency and gain
 * Mouse wheel or two-finger pinch control for Q
-* Double-click operation to flatten an EQ band
+* Double-click an EQ point to flatten its band
+* Double-click an empty graph position to add a Peaking band
 * Supported filter types:
 
   * Peaking

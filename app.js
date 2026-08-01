@@ -7,7 +7,7 @@ const FREQ_AUDIO_MIN = 20;
 const FREQ_MAX = 20000;
 const GAIN_MIN = -20;
 const GAIN_MAX = 20;
-const MAX_BANDS = 8;
+const MAX_BANDS = 20;
 const RTA_MIN_UPDATE_MS = 1000 / 60;
 
 const BASE_MARGIN = { left: 78, right: 26, top: 22, bottom: 54 };
@@ -76,7 +76,7 @@ const i18n = {
     language: "Language",
     eqTitle: "Parametric EQ",
     synthTitle: "Additive Sine Spectrum",
-    eqHint: "Drag point: frequency/gain. Wheel or two-finger pinch: Q. Double click: flatten band.",
+    eqHint: "Drag point: frequency/gain. Wheel or two-finger pinch: Q. Double click a point: flatten; empty area: add Peaking band.",
     synthHint: "Click: add sine. Drag: frequency/level. Double click: remove.",
     stopped: "Stopped",
     start: "Start",
@@ -135,7 +135,7 @@ const i18n = {
     language: "言語",
     eqTitle: "パラメトリックEQ",
     synthTitle: "加算合成スペクトル",
-    eqHint: "点をドラッグ: 周波数/ゲイン。ホイールまたは2本指ピンチ: Q。ダブルクリック: そのバンドをフラット化。",
+    eqHint: "点をドラッグ: 周波数/ゲイン。ホイールまたは2本指ピンチ: Q。点をダブルクリック: フラット化。空き位置: Peakingバンドを追加。",
     synthHint: "クリック: 正弦波を追加。ドラッグ: 周波数/レベル。ダブルクリック: 削除。",
     stopped: "停止中",
     start: "開始",
@@ -1304,6 +1304,30 @@ function nearestComponent(point) {
   return best.dist < touchRadius ? best.index : -1;
 }
 
+function suggestedBandFrequency() {
+  const frequencies = [FREQ_AUDIO_MIN, ...state.bands.map((band) => band.f), FREQ_MAX]
+    .map((frequency) => clamp(frequency, FREQ_AUDIO_MIN, FREQ_MAX))
+    .sort((a, b) => a - b);
+  let widestGap = { ratio: 0, low: FREQ_AUDIO_MIN, high: FREQ_MAX };
+  for (let index = 1; index < frequencies.length; index += 1) {
+    const low = frequencies[index - 1];
+    const high = frequencies[index];
+    const ratio = high / Math.max(FREQ_AUDIO_MIN, low);
+    if (ratio > widestGap.ratio) widestGap = { ratio, low, high };
+  }
+  return Math.round(Math.sqrt(widestGap.low * widestGap.high));
+}
+
+function addEqBand(frequency, gain = 0) {
+  if (state.bands.length >= MAX_BANDS) return false;
+  const band = makeFlatBand(clamp(frequency, FREQ_AUDIO_MIN, FREQ_MAX));
+  band.gain = clamp(gain, -18, 18);
+  state.bands.push(band);
+  state.selectedBand = state.bands.length - 1;
+  if (state.running && state.mode === "eq") restartForMode();
+  return true;
+}
+
 function addComponent(point) {
   if (state.components.length >= 20) return;
   state.waveTrigger = "auto";
@@ -1425,6 +1449,7 @@ plotHitLayer.addEventListener("dragstart", (event) => event.preventDefault());
 canvas.addEventListener("dragstart", (event) => event.preventDefault());
 
 plotHitLayer.addEventListener("dblclick", (event) => {
+  event.preventDefault();
   const point = canvasPoint(event);
   if (state.mode === "eq") {
     const index = nearestBand(point);
@@ -1432,6 +1457,8 @@ plotHitLayer.addEventListener("dblclick", (event) => {
       state.bands[index].gain = 0;
       state.bands[index].q = 1;
       syncAudio();
+    } else if (isInsideRect(point, plotRect())) {
+      addEqBand(xToLogFreq(point.x), yToGain(point.y));
     }
   } else {
     const index = nearestComponent(point);
@@ -1571,11 +1598,7 @@ el.audioFile.addEventListener("change", () => {
 });
 
 el.addBand.addEventListener("click", () => {
-  if (state.bands.length >= MAX_BANDS) return;
-  const base = [250, 500, 1000, 2000, 4000, 8000, 12000, 16000][state.bands.length] || 1000;
-  state.bands.push(makeFlatBand(base));
-  state.selectedBand = state.bands.length - 1;
-  if (state.running && state.mode === "eq") restartForMode();
+  addEqBand(suggestedBandFrequency());
   renderControls();
   draw();
 });
