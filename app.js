@@ -446,6 +446,17 @@ function startEqAudio() {
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
+    source.loopStart = 0;
+    source.loopEnd = buffer.duration;
+    if (state.noiseType === "music") {
+      source.onended = () => {
+        // Recover only while this is still the active Music source.
+        // Stop and source/mode changes clear or replace it before this event.
+        if (state.running && state.mode === "eq" && state.noiseType === "music" && state.audio.noise === source) {
+          restartForMode();
+        }
+      };
+    }
     source.connect(input);
     source.start();
     state.audio.noise = source;
